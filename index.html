@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<meta name="theme-color" content="#ff8fb1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>キャラチャット</title>
+<style>
+:root{
+  --bg:#fff6fa; --panel:#ffffff; --ink:#3a2a35; --sub:#8a7684; --line:#f3d9e4;
+  --accent:#ff6f9f; --accent2:#7fb6ff; --me:#ff8fb1; --meInk:#fff; --them:#ffffff; --themInk:#3a2a35;
+  --shadow:0 2px 10px rgba(255,111,159,.15);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#1e1a22; --panel:#2a2430; --ink:#f3e9f0; --sub:#b3a3b0; --line:#3d3442;
+    --accent:#ff7aa8; --accent2:#7fb6ff; --me:#d9558a; --meInk:#fff; --them:#332b39; --themInk:#f3e9f0;
+    --shadow:0 2px 10px rgba(0,0,0,.4);
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:16px;-webkit-text-size-adjust:100%}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font:inherit;color:var(--ink);background:var(--panel);border:2px solid var(--line);border-radius:12px;padding:10px 12px;width:100%;font-size:16px}
+textarea{resize:vertical}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+.screen{display:none;height:100dvh;flex-direction:column}
+.screen.on{display:flex}
+header{display:flex;align-items:center;gap:10px;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));background:var(--panel);border-bottom:2px solid var(--line);box-shadow:var(--shadow);z-index:2}
+header h1{font-size:18px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:20px;flex:none}
+.iconbtn:active{background:var(--line)}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+.avatar{width:44px;height:44px;border-radius:50%;background:var(--line);display:grid;place-items:center;font-size:24px;overflow:hidden;flex:none}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.avatar.sm{width:34px;height:34px;font-size:18px}
+/* list */
+.card{display:flex;align-items:center;gap:12px;background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:12px;margin-bottom:12px;box-shadow:var(--shadow);width:100%;text-align:left}
+.card .meta{flex:1;min-width:0}
+.card .name{font-weight:700}
+.card .last{color:var(--sub);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card.curS{border-color:var(--accent)}
+.card .acts{display:flex;gap:2px;flex:none}
+.card .acts button{width:36px;height:36px;border-radius:50%;font-size:16px}
+.card .acts button:active{background:var(--line)}
+.badge{display:inline-block;font-size:11px;background:var(--accent);color:#fff;border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:middle}
+.big{display:block;width:100%;padding:14px;border-radius:16px;background:var(--accent);color:#fff;font-weight:700;text-align:center;box-shadow:var(--shadow)}
+.big.ghost{background:transparent;color:var(--accent);border:2px dashed var(--accent);box-shadow:none}
+.big.danger{background:transparent;color:#e05a5a;border:2px solid #e05a5a;box-shadow:none}
+.empty{color:var(--sub);text-align:center;padding:30px 10px;line-height:1.8}
+/* form */
+label.f{display:block;margin-bottom:16px}
+label.f>span{display:block;font-weight:700;font-size:14px;margin-bottom:6px}
+label.f small{display:block;color:var(--sub);font-size:12px;margin-top:4px;line-height:1.5}
+.row{display:flex;gap:10px;align-items:center}
+.section{font-size:13px;color:var(--accent);font-weight:700;margin:20px 0 10px;letter-spacing:.05em}
+/* chat */
+#msgs{display:flex;flex-direction:column;gap:12px}
+.msg{display:flex;gap:8px;align-items:flex-end;max-width:100%}
+.msg.me{flex-direction:row-reverse}
+.bubble{padding:10px 14px;border-radius:18px;line-height:1.65;white-space:pre-wrap;word-break:break-word;max-width:78%;box-shadow:var(--shadow)}
+.msg.me .bubble{background:var(--me);color:var(--meInk);border-bottom-right-radius:6px}
+.msg.them .bubble{background:var(--them);color:var(--themInk);border:2px solid var(--line);border-bottom-left-radius:6px}
+.msg.err .bubble{background:transparent;border:2px dashed #e05a5a;color:#e05a5a;font-size:14px;box-shadow:none}
+.typing::after{content:"▍";animation:blink 1s infinite;opacity:.6}
+@keyframes blink{50%{opacity:0}}
+.tools{display:flex;gap:8px;justify-content:center;padding:4px 0 0}
+.chip{font-size:13px;padding:6px 12px;border-radius:999px;border:2px solid var(--line);background:var(--panel);color:var(--sub)}
+.composer{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom));background:var(--panel);border-top:2px solid var(--line)}
+.composer textarea{resize:none;max-height:140px;border-radius:20px;padding:10px 14px;line-height:1.4}
+.send{width:46px;height:46px;border-radius:50%;background:var(--accent);color:#fff;font-size:20px;flex:none;display:grid;place-items:center}
+.send:disabled{opacity:.4}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;opacity:0;transition:.3s;pointer-events:none;z-index:9}
+.toast.on{opacity:.92}
+</style>
+</head>
+<body>
+
+<!-- キャラ一覧 -->
+<section class="screen on" id="sList">
+  <header>
+    <h1>💬 キャラチャット</h1>
+    <button class="iconbtn" id="btnSettings" aria-label="設定">⚙️</button>
+  </header>
+  <div class="scroll">
+    <div id="charList"></div>
+    <button class="big ghost" id="btnNewChar">＋ キャラを追加</button>
+  </div>
+</section>
+
+<!-- チャット -->
+<section class="screen" id="sChat">
+  <header>
+    <button class="iconbtn" id="btnBack" aria-label="戻る">←</button>
+    <div class="avatar sm" id="chatAvatar"></div>
+    <h1 id="chatName"></h1>
+    <button class="iconbtn" id="btnSessions" aria-label="会話一覧">🗂</button>
+    <button class="iconbtn" id="btnEditChar" aria-label="キャラ編集">✏️</button>
+  </header>
+  <div class="scroll" id="chatScroll">
+    <div id="msgs"></div>
+    <div class="tools" id="chatTools">
+      <button class="chip" id="btnRegen">🔄 返事を作り直す</button>
+      <button class="chip" id="btnUndo">↩️ 1往復消す</button>
+    </div>
+  </div>
+  <form class="composer" id="composer">
+    <textarea id="input" rows="1" placeholder="メッセージ"></textarea>
+    <button class="send" id="btnSend" type="submit" aria-label="送信">➤</button>
+  </form>
+</section>
+
+<!-- 会話（セッション）一覧 -->
+<section class="screen" id="sSess">
+  <header>
+    <button class="iconbtn" id="btnSessBack" aria-label="戻る">←</button>
+    <h1 id="sessTitle">会話の一覧</h1>
+  </header>
+  <div class="scroll">
+    <button class="big" id="btnNewSess" style="margin-bottom:16px">＋ 新しい会話をはじめる</button>
+    <div id="sessList"></div>
+  </div>
+</section>
+
+<!-- キャラ編集 -->
+<section class="screen" id="sEdit">
+  <header>
+    <button class="iconbtn" id="btnEditBack" aria-label="戻る">←</button>
+    <h1 id="editTitle">キャラ設定</h1>
+    <button class="iconbtn" id="btnSaveChar" aria-label="保存">💾</button>
+  </header>
+  <div class="scroll">
+    <label class="f"><span>名前</span><input id="fName" placeholder="例：ミカ"></label>
+    <div class="f" style="margin-bottom:16px">
+      <span style="display:block;font-weight:700;font-size:14px;margin-bottom:6px">アイコン</span>
+      <div class="row">
+        <div class="avatar" id="fAvatarPrev"></div>
+        <input id="fEmoji" placeholder="絵文字（例：🐰）" style="flex:1">
+        <button class="chip" type="button" id="btnPickImg">🖼 画像</button>
+        <input type="file" id="fImg" accept="image/*" hidden>
+      </div>
+    </div>
+    <label class="f"><span>性格・設定プロンプト</span>
+      <textarea id="fPrompt" rows="10" placeholder="例：
+あなたは「ミカ」という17歳の女の子です。
+・明るくて少しドジ、語尾に「〜だよっ」をつけがち
+・ユーザーのことを「せんぱい」と呼ぶ
+・返事は2〜3文くらいで短めに
+・絶対にAIだとは名乗らない"></textarea>
+      <small>口調・一人称・呼び方・返事の長さ・NGなことを書くとキャラが安定しやすいよ</small>
+    </label>
+    <label class="f"><span>最初のあいさつ（任意）</span>
+      <textarea id="fGreeting" rows="2" placeholder="例：せんぱい、おかえりなさいだよっ！"></textarea>
+    </label>
+    <label class="f"><span>ユーザーの呼ばれ方・プロフィール（任意）</span>
+      <textarea id="fUser" rows="2" placeholder="例：ユーザーの名前は「ゆう」。ミカの1つ上の先輩。"></textarea>
+    </label>
+    <label class="f"><span>ゆらぎ（temperature）: <b id="fTempVal">1.0</b></span>
+      <input type="range" id="fTemp" min="0" max="2" step="0.1" value="1" style="padding:0;border:none">
+      <small>低い＝安定・まじめ／高い＝個性的・予想外</small>
+    </label>
+    <div class="section">会話データ</div>
+    <button class="big ghost" type="button" id="btnClearChat" style="margin-bottom:10px">🧹 今の会話をリセット</button>
+    <button class="big danger" type="button" id="btnDelChar">🗑 このキャラを削除</button>
+  </div>
+</section>
+
+<!-- 全体設定 -->
+<section class="screen" id="sSettings">
+  <header>
+    <button class="iconbtn" id="btnSetBack" aria-label="戻る">←</button>
+    <h1>設定</h1>
+    <button class="iconbtn" id="btnSaveSet" aria-label="保存">💾</button>
+  </header>
+  <div class="scroll">
+    <label class="f"><span>Gemini APIキー</span>
+      <input id="sKey" type="password" autocomplete="off" placeholder="AIza...">
+      <small>Google AI Studio（aistudio.google.com）で発行できるよ。キーはこの端末のブラウザの中だけに保存されて、Google以外には送られないよ。</small>
+    </label>
+    <label class="f"><span>モデル</span>
+      <input id="sModel" list="models" placeholder="gemini-2.5-flash">
+      <datalist id="models">
+        <option value="gemini-2.5-flash">
+        <option value="gemini-2.5-flash-lite">
+        <option value="gemini-2.5-pro">
+      </datalist>
+      <small>迷ったら gemini-2.5-flash。新しいモデル名を直接打ってもOK</small>
+    </label>
+    <label class="f"><span>覚えておく会話の往復数</span>
+      <input id="sHist" type="number" min="2" max="200" placeholder="40">
+      <small>多いほど昔の話を覚えてるけど、そのぶん料金・速度に影響するよ</small>
+    </label>
+    <div class="section">バックアップ</div>
+    <button class="big ghost" type="button" id="btnExport" style="margin-bottom:10px">📤 キャラと会話を書き出す（JSON）</button>
+    <button class="big ghost" type="button" id="btnImport">📥 読み込む</button>
+    <input type="file" id="fImport" accept="application/json,.json" hidden>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const LS = "charachat_v1";
+const DEFAULT_MODEL = "gemini-2.5-flash";
+
+// ---------- 保存まわり ----------
+let state = load();
+function load(){
+  try{ const s = JSON.parse(localStorage.getItem(LS)); if(s && s.chars) return s; }catch(e){}
+  return { key:"", model:DEFAULT_MODEL, hist:40, chars:[] };
+}
+function save(){
+  try{ localStorage.setItem(LS, JSON.stringify(state)); }
+  catch(e){ toast("保存に失敗…容量オーバーかも（画像を小さくしてね）"); }
+}
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+let toastT;
+function toast(t){ const el=$("toast"); el.textContent=t; el.classList.add("on"); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove("on"),2200); }
+
+// ---------- セッション（会話）まわり ----------
+// キャラ c は sessions:[{id,title,messages,updated}] と sid（今の会話）を持つ
+function norm(c){
+  if(!Array.isArray(c.sessions) || !c.sessions.length){
+    c.sessions = [{id:uid(), title:"", messages:c.messages||[], updated:Date.now()}];
+  }
+  delete c.messages;
+  if(!c.sessions.some(s=>s.id===c.sid)) c.sid = c.sessions[0].id;
+}
+const sess = c => c.sessions.find(s=>s.id===c.sid) || c.sessions[0];
+const msgs = c => sess(c).messages;
+function touch(c){
+  const s = sess(c); s.updated = Date.now();
+  if(!s.title){ const f = s.messages.find(x=>x.role==="user"); if(f) s.title = f.text.replace(/\s+/g," ").slice(0,24); }
+}
+function newSession(c){
+  const s = {id:uid(), title:"", messages:c.greeting?[{role:"model",text:c.greeting}]:[], updated:Date.now()};
+  c.sessions.unshift(s); c.sid = s.id; return s;
+}
+const fmtDate = t => { const d=new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`; };
+
+function show(id){ document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("on", s.id===id)); }
+function setAvatar(el, c){
+  el.innerHTML = "";
+  if(c.img){ const i=new Image(); i.src=c.img; i.alt=""; el.appendChild(i); }
+  else el.textContent = c.emoji || "🙂";
+}
+
+// ---------- 一覧 ----------
+function renderList(){
+  const box = $("charList"); box.innerHTML = "";
+  if(!state.key){
+    box.innerHTML = '<div class="empty">はじめに右上の ⚙️ から<br>Gemini APIキーを入れてね</div>';
+  } else if(!state.chars.length){
+    box.innerHTML = '<div class="empty">まだキャラがいないよ<br>「＋ キャラを追加」から作ってね</div>';
+  }
+  state.chars.forEach(c=>{
+    const b = document.createElement("button"); b.className="card";
+    const av = document.createElement("div"); av.className="avatar"; setAvatar(av,c);
+    const m = document.createElement("div"); m.className="meta";
+    const n = document.createElement("div"); n.className="name"; n.textContent=c.name||"（名前なし）";
+    const l = document.createElement("div"); l.className="last";
+    const ms = msgs(c), last = ms[ms.length-1];
+    l.textContent = last ? last.text.replace(/\s+/g," ") : "タップして話しかけよう";
+    m.append(n,l); b.append(av,m);
+    b.onclick = () => openChat(c.id);
+    box.appendChild(b);
+  });
+}
+
+// ---------- 設定 ----------
+$("btnSettings").onclick = () => {
+  $("sKey").value = state.key; $("sModel").value = state.model; $("sHist").value = state.hist;
+  show("sSettings");
+};
+$("btnSetBack").onclick = () => { renderList(); show("sList"); };
+$("btnSaveSet").onclick = () => {
+  state.key = $("sKey").value.trim();
+  state.model = $("sModel").value.trim() || DEFAULT_MODEL;
+  state.hist = Math.max(2, parseInt($("sHist").value)||40);
+  save(); toast("保存したよ"); renderList(); show("sList");
+};
+$("btnExport").onclick = () => {
+  const data = JSON.stringify({chars:state.chars}, null, 2);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([data],{type:"application/json"}));
+  a.download = "charachat-backup.json"; a.click();
+};
+$("btnImport").onclick = () => $("fImport").click();
+$("fImport").onchange = async e => {
+  const f = e.target.files[0]; if(!f) return;
+  try{
+    const d = JSON.parse(await f.text());
+    if(!Array.isArray(d.chars)) throw 0;
+    const ids = new Set(state.chars.map(c=>c.id));
+    d.chars.forEach(c=>{ if(ids.has(c.id)) c.id=uid(); norm(c); state.chars.push(c); });
+    save(); toast(d.chars.length+"人読み込んだよ");
+  }catch(_){ toast("読み込めなかった…"); }
+  e.target.value="";
+};
+
+// ---------- キャラ編集 ----------
+let editing = null, editImg = null;
+function openEdit(c){
+  editing = c ? c.id : null;
+  $("editTitle").textContent = c ? "キャラ設定" : "新しいキャラ";
+  $("fName").value = c?.name||""; $("fEmoji").value = c?.emoji||"";
+  $("fPrompt").value = c?.prompt||""; $("fGreeting").value = c?.greeting||"";
+  $("fUser").value = c?.userProfile||"";
+  $("fTemp").value = c?.temp ?? 1; $("fTempVal").textContent = (+$("fTemp").value).toFixed(1);
+  editImg = c?.img || null;
+  $("btnClearChat").style.display = $("btnDelChar").style.display = c ? "" : "none";
+  previewAvatar(); show("sEdit");
+}
+function previewAvatar(){ setAvatar($("fAvatarPrev"), {img:editImg, emoji:$("fEmoji").value}); }
+$("fEmoji").oninput = () => { editImg = null; previewAvatar(); };
+$("fTemp").oninput = () => $("fTempVal").textContent = (+$("fTemp").value).toFixed(1);
+$("btnPickImg").onclick = () => $("fImg").click();
+$("fImg").onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const img = new Image();
+  img.onload = () => {
+    const S=160, cv=document.createElement("canvas"); cv.width=cv.height=S;
+    const s=Math.min(img.width,img.height);
+    cv.getContext("2d").drawImage(img,(img.width-s)/2,(img.height-s)/2,s,s,0,0,S,S);
+    editImg = cv.toDataURL("image/jpeg",.85); previewAvatar(); URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(f); e.target.value="";
+};
+$("btnNewChar").onclick = () => openEdit(null);
+$("btnEditChar").onclick = () => openEdit(cur());
+$("btnEditBack").onclick = () => { if(editing){ show("sChat"); } else { renderList(); show("sList"); } };
+$("btnSaveChar").onclick = () => {
+  const name = $("fName").value.trim();
+  if(!name){ toast("名前を入れてね"); return; }
+  const data = { name, emoji:$("fEmoji").value.trim(), img:editImg, prompt:$("fPrompt").value,
+    greeting:$("fGreeting").value.trim(), userProfile:$("fUser").value.trim(), temp:+$("fTemp").value };
+  let c;
+  if(editing){ c = cur(); Object.assign(c,data); }
+  else { c = {id:uid(), ...data}; norm(c); state.chars.unshift(c); }
+  if(!msgs(c).length && c.greeting) msgs(c).push({role:"model", text:c.greeting});
+  save(); toast("保存したよ"); openChat(c.id);
+};
+$("btnClearChat").onclick = () => {
+  if(!confirm("今の会話の中身を全部消す？")) return;
+  const c = cur(), s = sess(c); s.messages = c.greeting ? [{role:"model",text:c.greeting}] : []; s.title = "";
+  save(); toast("リセットしたよ"); openChat(c.id);
+};
+$("btnDelChar").onclick = () => {
+  if(!confirm("このキャラを削除する？（会話も消えるよ）")) return;
+  state.chars = state.chars.filter(c=>c.id!==editing); save();
+  renderList(); show("sList");
+};
+
+// ---------- チャット ----------
+let curId = null, busy = false, abortCtl = null;
+const cur = () => state.chars.find(c=>c.id===curId);
+function openChat(id){
+  curId = id; const c = cur();
+  setAvatar($("chatAvatar"), c); $("chatName").textContent = c.name;
+  renderMsgs(); show("sChat"); scrollDown();
+}
+
+// ---------- 会話一覧 ----------
+$("btnSessions").onclick = () => { if(!busy) openSessions(); };
+$("btnSessBack").onclick = () => openChat(curId);
+$("btnNewSess").onclick = () => { newSession(cur()); save(); toast("新しい会話だよ"); openChat(curId); };
+function openSessions(){
+  const c = cur(); $("sessTitle").textContent = c.name+" との会話";
+  const box = $("sessList"); box.innerHTML = "";
+  [...c.sessions].sort((a,b)=>b.updated-a.updated).forEach(s=>{
+    const row = document.createElement("div"); row.className = "card"+(s.id===c.sid?" curS":"");
+    const m = document.createElement("div"); m.className="meta";
+    const n = document.createElement("div"); n.className="name"; n.textContent = s.title || "（新しい会話）";
+    if(s.id===c.sid){ const bd=document.createElement("span"); bd.className="badge"; bd.textContent="いま"; n.appendChild(bd); }
+    const l = document.createElement("div"); l.className="last";
+    l.textContent = `${fmtDate(s.updated)}・${s.messages.filter(x=>x.role==="user").length}往復`;
+    m.append(n,l);
+    const acts = document.createElement("div"); acts.className="acts";
+    const ren = document.createElement("button"); ren.textContent="✏️"; ren.ariaLabel="名前を変える";
+    ren.onclick = e => { e.stopPropagation(); const t = prompt("会話の名前", s.title); if(t!==null){ s.title=t.trim(); save(); openSessions(); } };
+    const del = document.createElement("button"); del.textContent="🗑"; del.ariaLabel="削除";
+    del.onclick = e => {
+      e.stopPropagation();
+      if(!confirm("この会話を削除する？")) return;
+      c.sessions = c.sessions.filter(x=>x.id!==s.id);
+      if(!c.sessions.length) newSession(c);
+      norm(c); save(); openSessions();
+    };
+    acts.append(ren,del); row.append(m,acts);
+    row.onclick = () => { c.sid = s.id; save(); openChat(c.id); };
+    box.appendChild(row);
+  });
+  show("sSess");
+}
+$("btnBack").onclick = () => { if(abortCtl) abortCtl.abort(); renderList(); show("sList"); };
+
+function bubble(role, text, extra){
+  const c = cur();
+  const m = document.createElement("div"); m.className = "msg "+(role==="user"?"me":"them")+(extra?" "+extra:"");
+  if(role!=="user"){ const av=document.createElement("div"); av.className="avatar sm"; setAvatar(av,c); m.appendChild(av); }
+  const b = document.createElement("div"); b.className="bubble"; b.textContent=text; m.appendChild(b);
+  $("msgs").appendChild(m); return b;
+}
+function renderMsgs(){
+  $("msgs").innerHTML = "";
+  msgs(cur()).forEach(x=>bubble(x.role, x.text));
+  updateTools();
+}
+function updateTools(){
+  const ms = msgs(cur());
+  $("btnRegen").style.display = (!busy && ms.some(x=>x.role==="user")) ? "" : "none";
+  $("btnUndo").style.display = (!busy && ms.some(x=>x.role==="user")) ? "" : "none";
+}
+function scrollDown(){ const s=$("chatScroll"); requestAnimationFrame(()=>s.scrollTop=s.scrollHeight); }
+
+const input = $("input");
+input.addEventListener("input", () => { input.style.height="auto"; input.style.height=Math.min(input.scrollHeight,140)+"px"; });
+input.addEventListener("keydown", e => {
+  // PCでは Enter 送信 / Shift+Enter 改行。スマホは改行キー＝改行
+  if(e.key==="Enter" && !e.shiftKey && !e.isComposing && matchMedia("(pointer:fine)").matches){ e.preventDefault(); $("composer").requestSubmit(); }
+});
+$("composer").onsubmit = e => {
+  e.preventDefault();
+  const t = input.value.trim(); if(!t || busy) return;
+  if(!state.key){ toast("先に⚙️設定でAPIキーを入れてね"); return; }
+  msgs(cur()).push({role:"user", text:t}); touch(cur()); save();
+  bubble("user", t); input.value=""; input.style.height="auto";
+  reply();
+};
+$("btnRegen").onclick = () => {
+  if(busy) return;
+  const ms=msgs(cur());
+  if(ms[ms.length-1]?.role==="model") ms.pop();
+  if(ms[ms.length-1]?.role!=="user") return;
+  save(); renderMsgs(); reply();
+};
+$("btnUndo").onclick = () => {
+  const ms = msgs(cur());
+  while(ms.length && ms[ms.length-1].role==="model") ms.pop();
+  if(ms.length && ms[ms.length-1].role==="user") ms.pop();
+  if(!ms.length && cur().greeting) ms.push({role:"model",text:cur().greeting});
+  save(); renderMsgs();
+};
+
+function systemText(c){
+  let s = (c.prompt||"").trim() || `あなたは「${c.name}」というキャラクターです。`;
+  if(c.userProfile) s += "\n\n# 会話相手（ユーザー）について\n" + c.userProfile;
+  s += `\n\n# ルール\n・常に「${c.name}」としてロールプレイを続け、キャラを崩さないこと。\n・地の文や説明ではなく、${c.name}のセリフとして返答すること。`;
+  return s;
+}
+function buildContents(c){
+  let ms = msgs(c).slice(-state.hist*2);
+  const contents = ms.map(x=>({role:x.role, parts:[{text:x.text}]}));
+  if(contents.length && contents[0].role==="model") contents.unshift({role:"user", parts:[{text:"（会話スタート）"}]});
+  return contents;
+}
+
+async function reply(){
+  const c = cur(), target = msgs(c); busy = true; $("btnSend").disabled = true; updateTools();
+  const b = bubble("model", ""); b.classList.add("typing"); scrollDown();
+  let text = "";
+  abortCtl = new AbortController();
+  try{
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(state.key)}`;
+    const res = await fetch(url, {
+      method:"POST", headers:{"Content-Type":"application/json"}, signal:abortCtl.signal,
+      body: JSON.stringify({
+        systemInstruction:{parts:[{text:systemText(c)}]},
+        contents: buildContents(c),
+        generationConfig:{ temperature:c.temp ?? 1 }
+      })
+    });
+    if(!res.ok){
+      let msg = res.status+"";
+      try{ const j = await res.json(); msg += " "+(j.error?.message||""); }catch(_){}
+      throw new Error(msg);
+    }
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "", blocked = "";
+    while(true){
+      const {done, value} = await reader.read(); if(done) break;
+      buf += dec.decode(value, {stream:true});
+      let i;
+      while((i = buf.indexOf("\n")) >= 0){
+        const line = buf.slice(0,i).trim(); buf = buf.slice(i+1);
+        if(!line.startsWith("data:")) continue;
+        let j; try{ j = JSON.parse(line.slice(5)); }catch(_){ continue; }
+        if(j.promptFeedback?.blockReason) blocked = j.promptFeedback.blockReason;
+        const cand = j.candidates?.[0];
+        if(cand?.finishReason && /SAFETY|PROHIBITED|BLOCK/.test(cand.finishReason)) blocked = cand.finishReason;
+        for(const p of cand?.content?.parts||[]){ if(p.text && !p.thought) text += p.text; }
+        b.textContent = text; scrollDown();
+      }
+    }
+    if(!text) throw new Error(blocked ? "安全フィルタで止められたみたい（"+blocked+"）" : "空の返事が来たよ");
+    b.classList.remove("typing");
+    target.push({role:"model", text}); touch(c); save();
+  }catch(err){
+    b.parentElement.remove();
+    if(err.name !== "AbortError"){
+      if(text){ target.push({role:"model", text}); touch(c); save(); bubble("model", text); }
+      bubble("model", "⚠️ エラー: "+err.message+"\n（🔄で作り直せるよ）", "err");
+    }
+  }finally{
+    busy = false; abortCtl = null; $("btnSend").disabled = false; updateTools(); scrollDown();
+  }
+}
+
+state.chars.forEach(norm); save();
+renderList();
+})();
+</script>
+</body>
+</html>
