@@ -188,6 +188,14 @@ label.f small{display:block;color:var(--sub);font-size:12px;margin-top:4px;line-
       </datalist>
       <small>迷ったら gemini-2.5-flash。新しいモデル名を直接打ってもOK</small>
     </label>
+    <label class="f"><span>考える時間（thinking）</span>
+      <select id="sThink">
+        <option value="off">⚡ 速さ優先（ほぼ考えない）</option>
+        <option value="low">🙂 ちょっと考える</option>
+        <option value="auto">🧠 おまかせ（遅いけど賢い）</option>
+      </select>
+      <small>Geminiは返事の前に裏で「考える」時間があって、そのぶん待たされるよ。キャラとのおしゃべりなら速さ優先で十分！</small>
+    </label>
     <label class="f"><span>覚えておく会話の往復数</span>
       <input id="sHist" type="number" min="2" max="200" placeholder="40">
       <small>多いほど昔の話を覚えてるけど、そのぶん料金・速度に影響するよ</small>
@@ -274,6 +282,7 @@ function renderList(){
 // ---------- 設定 ----------
 $("btnSettings").onclick = () => {
   $("sKey").value = state.key; $("sModel").value = state.model; $("sHist").value = state.hist;
+  $("sThink").value = state.think || "off";
   show("sSettings");
 };
 $("btnSetBack").onclick = () => { renderList(); show("sList"); };
@@ -281,6 +290,7 @@ $("btnSaveSet").onclick = () => {
   state.key = $("sKey").value.trim();
   state.model = $("sModel").value.trim() || DEFAULT_MODEL;
   state.hist = Math.max(2, parseInt($("sHist").value)||40);
+  state.think = $("sThink").value;
   save(); toast("保存したよ"); renderList(); show("sList");
 };
 $("btnExport").onclick = () => {
@@ -459,21 +469,39 @@ function buildContents(c){
   return contents;
 }
 
+// モデルごとに「考える量」の指定方法が違うので振り分け
+function thinkingConfig(model, mode){
+  mode = mode || "off";
+  if(mode === "auto") return null;
+  const m = model.toLowerCase();
+  if(/gemini-[3-9]/.test(m)) return { thinkingLevel: "low" };
+  if(m.includes("2.5-pro")) return { thinkingBudget: mode==="off" ? 128 : 1024 };   // proは0にできない
+  if(m.includes("2.5")) return { thinkingBudget: mode==="off" ? 0 : 1024 };
+  return null;
+}
+
 async function reply(){
   const c = cur(), target = msgs(c); busy = true; $("btnSend").disabled = true; updateTools();
   const b = bubble("model", ""); b.classList.add("typing"); scrollDown();
   let text = "";
+  // 最初の文字が来るまで経過秒数を出す
+  const t0 = Date.now();
+  const tick = setInterval(()=>{ if(!text) b.textContent = `考え中… ${Math.floor((Date.now()-t0)/1000)}秒`; }, 1000);
   abortCtl = new AbortController();
   try{
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(state.key)}`;
-    const res = await fetch(url, {
+    const think = thinkingConfig(state.model, state.think);
+    const send = tc => fetch(url, {
       method:"POST", headers:{"Content-Type":"application/json"}, signal:abortCtl.signal,
       body: JSON.stringify({
         systemInstruction:{parts:[{text:systemText(c)}]},
         contents: buildContents(c),
-        generationConfig:{ temperature:c.temp ?? 1 }
+        generationConfig: Object.assign({ temperature:c.temp ?? 1 }, tc ? {thinkingConfig:tc} : {})
       })
     });
+    let res = await send(think);
+    // モデルがthinking指定に対応してなかったら指定なしでやり直す
+    if(!res.ok && res.status === 400 && think) res = await send(null);
     if(!res.ok){
       let msg = res.status+"";
       try{ const j = await res.json(); msg += " "+(j.error?.message||""); }catch(_){}
@@ -506,6 +534,7 @@ async function reply(){
       bubble("model", "⚠️ エラー: "+err.message+"\n（🔄で作り直せるよ）", "err");
     }
   }finally{
+    clearInterval(tick);
     busy = false; abortCtl = null; $("btnSend").disabled = false; updateTools(); scrollDown();
   }
 }
